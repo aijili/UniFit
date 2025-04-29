@@ -1,177 +1,251 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, Alert, ActivityIndicator, TouchableOpacity } from 'react-native';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../firebaseConfig';
-import { router } from 'expo-router';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ActivityIndicator,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
+import { useRouter } from 'expo-router';
+import { auth, db } from '../firebaseConfig.js';
+import { doc, setDoc } from 'firebase/firestore';
 
 export default function LoginScreen() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [firebaseReady, setFirebaseReady] = useState(false);
+  const [debugInfo, setDebugInfo] = useState('');
 
   useEffect(() => {
-    // Check if Firebase is initialized
-    const checkFirebase = async () => {
-      try {
-        setIsLoading(true);
-        // Simple check if auth is available
-        if (auth) {
-          console.log("Firebase Auth initialized successfully");
-          setFirebaseReady(true);
-        } else {
-          console.error("Firebase Auth not initialized");
-        }
-      } catch (error) {
-        console.error("Firebase initialization error:", error);
-        Alert.alert(
-          "Firebase Error",
-          "There was a problem connecting to our services. Please try again later."
-        );
-      } finally {
-        setIsLoading(false);
+    // Check if user is already logged in
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      console.log('Auth state changed:', user ? 'User logged in' : 'No user');
+      setDebugInfo(`Auth state: ${user ? 'Logged in' : 'Not logged in'}`);
+      
+      if (user) {
+        // User is signed in, redirect to home
+        console.log('User is signed in, redirecting to tabs');
+        router.replace('/(tabs)' as any);
       }
-    };
+      setFirebaseReady(true);
+    });
 
-    checkFirebase();
+    return () => unsubscribe();
   }, []);
 
   const handleLogin = async () => {
-    if (!firebaseReady || !auth) {
-      Alert.alert("Error", "Firebase is not ready. Please try again later.");
-      return;
-    }
-
     if (!email || !password) {
-      Alert.alert("Error", "Please enter both email and password");
+      Alert.alert('Error', 'Please enter both email and password.');
       return;
     }
-
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      await signInWithEmailAndPassword(auth, email, password);
-      Alert.alert('Success', 'Logged in!');
-      router.replace('/'); // Navigate to home screen
-    } catch (error: any) {
-      console.error("Login error:", error);
-      const errorMessage = error.message || "Unknown error occurred";
-      Alert.alert('Login Error', errorMessage);
+      console.log('Attempting to sign in with:', email);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      console.log('Sign in successful:', userCredential.user.uid);
+      setDebugInfo(`Sign in successful: ${userCredential.user.uid}`);
+      
+      // Force navigation to tabs
+      // router.replace('/(tabs)' as any);
+      router.replace('/(tabs)/home');
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setDebugInfo(`Login error: ${err.code}`);
+      
+      let msg = 'An unexpected error occurred.';
+      if (
+        err.code === 'auth/user-not-found' ||
+        err.code === 'auth/wrong-password'
+      ) {
+        msg = 'Invalid email or password.';
+      } else if (err.code === 'auth/invalid-email') {
+        msg = 'Invalid email format.';
+      } else if (err.code === 'auth/operation-not-allowed') {
+        msg =
+          'Email/password sign-in is not enabled. Please contact support.';
+      }
+      Alert.alert('Login Failed', msg);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSignUp = async () => {
-    if (!firebaseReady || !auth) {
-      Alert.alert("Error", "Firebase is not ready. Please try again later.");
-      return;
-    }
-
     if (!email || !password) {
-      Alert.alert("Error", "Please enter both email and password");
+      Alert.alert('Error', 'Please enter both email and password.');
       return;
     }
-
     if (password.length < 6) {
-      Alert.alert("Error", "Password should be at least 6 characters");
+      Alert.alert('Error', 'Password must be at least 6 characters.');
       return;
     }
-
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      await createUserWithEmailAndPassword(auth, email, password);
-      Alert.alert('Success', 'Account created!');
-    } catch (error: any) {
-      console.error("Sign up error:", error);
-      const errorMessage = error.message || "Unknown error occurred";
-      Alert.alert('Sign Up Error', errorMessage);
+      console.log('Attempting to create user with:', email);
+      // Create auth user
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      console.log('User created successfully:', userCredential.user.uid);
+      setDebugInfo(`User created: ${userCredential.user.uid}`);
+      
+      // Create user document in Firestore
+      const userDoc = {
+        email: email,
+        username: email.split('@')[0], // Default username from email
+        avatarUrl: null,
+        borrowedCount: 0,
+        lentCount: 0,
+        rating: 0,
+        createdAt: new Date().toISOString(),
+      };
+      
+      await setDoc(doc(db, 'users', userCredential.user.uid), userDoc);
+      console.log('User document created in Firestore');
+      
+      // Force navigation to tabs
+      router.replace('/(tabs)' as any);
+    } catch (err: any) {
+      console.error('Sign up error:', err);
+      setDebugInfo(`Sign up error: ${err.code}`);
+      
+      let msg = 'An unexpected error occurred.';
+      if (err.code === 'auth/email-already-in-use') {
+        msg = 'Email is already in use.';
+      } else if (err.code === 'auth/invalid-email') {
+        msg = 'Invalid email format.';
+      } else if (err.code === 'auth/weak-password') {
+        msg = 'Password is too weak.';
+      } else if (err.code === 'auth/operation-not-allowed') {
+        msg =
+          'Email/password sign-up is not enabled. Please contact support.';
+      }
+      Alert.alert('Sign Up Failed', msg);
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (isLoading) {
+  if (isLoading || !firebaseReady) {
     return (
-      <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color="#0000ff" />
-        <Text style={{marginTop: 10}}>Loading...</Text>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#6C63FF" />
+        <Text style={styles.loadingText}>Loading...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Welcome</Text>
-      
-      {!firebaseReady && (
-        <Text style={styles.errorText}>
-          Firebase connection issue. Please check your internet connection.
-        </Text>
-      )}
-
-      <TextInput
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-        style={styles.input}
-      />
-
-      <TextInput
-        placeholder="Password"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        style={styles.input}
-      />
-
-      <Button title="Log In" onPress={handleLogin} disabled={!firebaseReady} />
-      <View style={{ height: 10 }} />
-      <Button title="Sign Up" onPress={handleSignUp} disabled={!firebaseReady} />
-      
-      <TouchableOpacity 
-        style={styles.debugLink} 
-        onPress={() => router.push('/firebase-debug')}
+    <LinearGradient
+      colors={['#FDE6D6', '#FFFFFF']}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+      style={styles.gradient}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.select({ ios: 'padding', android: undefined })}
+        style={styles.container}
       >
-        <Text style={styles.debugText}>Debug Firebase Connection</Text>
-      </TouchableOpacity>
-    </View>
+        <Image
+          source={require('../assets/images/logo.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+
+        <TextInput
+          style={styles.input}
+          placeholder="Email"
+          placeholderTextColor="#6B7280"
+          autoCapitalize="none"
+          keyboardType="email-address"
+          value={email}
+          onChangeText={setEmail}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Password"
+          placeholderTextColor="#6B7280"
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+        />
+
+        <TouchableOpacity style={styles.primaryButton} onPress={handleLogin}>
+          <Text style={styles.primaryButtonText}>Log In</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={handleSignUp}>
+          <Text style={styles.signUpText}>Don't have an account? Sign Up</Text>
+        </TouchableOpacity>
+        
+        {/* Debug info */}
+        <Text style={styles.debugText}>{debugInfo}</Text>
+      </KeyboardAvoidingView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
+  gradient: { flex: 1 },
   container: {
-    padding: 20,
     flex: 1,
+    paddingHorizontal: 32,
     justifyContent: 'center',
-    backgroundColor: '#fff'
   },
-  centered: {
-    alignItems: 'center'
-  },
-  title: {
-    fontSize: 24,
-    marginBottom: 20,
-    alignSelf: 'center'
+  logo: {
+    width: 120,
+    height: 120,
+    alignSelf: 'center',
+    marginBottom: 32,
   },
   input: {
-    borderBottomWidth: 1,
-    marginBottom: 12,
-    padding: 8,
-    fontSize: 16
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#111827',
+    marginBottom: 16,
   },
-  errorText: {
-    color: 'red',
+  primaryButton: {
+    backgroundColor: '#6C63FF',
+    borderRadius: 8,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  signUpText: {
+    color: '#6C63FF',
     textAlign: 'center',
-    marginBottom: 15
+    marginTop: 16,
+    fontSize: 14,
   },
-  debugLink: {
-    marginTop: 30,
-    alignItems: 'center'
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    color: '#6C63FF',
+    fontSize: 16,
   },
   debugText: {
-    color: 'blue',
-    textDecorationLine: 'underline'
-  }
-}); 
+    marginTop: 20,
+    color: '#666',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+});
