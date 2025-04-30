@@ -4,6 +4,7 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 // Your web app's Firebase configuration
+// TODO: use .env for storing app secrets
 const firebaseConfig = {
     apiKey: "AIzaSyDTv4PwJ967bdcNgGpIWgY0olNMWktt7yY",
     authDomain: "unifit-mdb.firebaseapp.com",

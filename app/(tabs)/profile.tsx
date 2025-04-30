@@ -498,7 +498,19 @@ export default function ProfileScreen() {
   };
 
   useEffect(() => {
-    fetchProfile();
+    let unsubscribe: Unsubscribe | undefined;
+    
+    const setupProfile = async () => {
+      unsubscribe = await fetchProfile();
+    };
+    
+    setupProfile();
+    
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, []);
 
   const pickAndUploadImage = async (): Promise<void> => {

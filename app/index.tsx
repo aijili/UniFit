@@ -2,19 +2,27 @@ import React, { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../firebaseConfig.js';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../firebaseConfig';
 
 export default function IndexScreen() {
   const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // User is signed in, redirect to tabs
-        router.replace('/(tabs)' as any);
+        // Check if user has completed their profile
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (!userDoc.exists() || !userDoc.data().username) {
+          // User hasn't completed profile, redirect to onboarding
+          router.replace('/onboarding');
+        } else {
+          // User is signed in and has completed profile, redirect to tabs
+          router.replace('/(tabs)');
+        }
       } else {
         // User is not signed in, redirect to login
-        router.replace('/login' as any);
+        router.replace('/login');
       }
     });
 
@@ -33,5 +41,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#F5F5F5',
   },
 }); 
