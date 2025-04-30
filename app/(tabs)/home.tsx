@@ -11,10 +11,9 @@ import {
   Dimensions,
   ActivityIndicator,
   Alert,
-  Linking,
   ScrollView,
 } from 'react-native';
-import { collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import ListingModal from '../../components/ListingModal';
@@ -62,16 +61,12 @@ export default function HomeScreen() {
     let isMounted = true;
     (async () => {
       try {
-        console.log('Fetching posts from Firestore...');
         const postsRef = collection(db, 'posts');
         const postSnap = await getDocs(postsRef);
-        
-        console.log('Found', postSnap.size, 'posts');
-        
+
         if (isMounted) {
           const postData = postSnap.docs.map(doc => {
             const data = doc.data();
-            console.log('Raw post data:', data);
             return {
               id: doc.id,
               title: data.description || 'No title',
@@ -86,12 +81,9 @@ export default function HomeScreen() {
               username: data.username || '',
             } as Post;
           });
-          
-          console.log('Processed posts:', postData);
           setPosts(postData);
         }
       } catch (err) {
-        console.error('Firestore error:', err);
         Alert.alert(
           'Error',
           'Failed to load posts. Please check your connection.'
@@ -104,14 +96,10 @@ export default function HomeScreen() {
   }, []);
 
   const renderPost = ({ item }: { item: Post }) => {
-    console.log('Post data:', item);
     return (
       <TouchableOpacity 
         style={styles.postCard}
-        onPress={() => {
-          console.log('Selected post:', item);
-          setSelectedPost(item);
-        }}
+        onPress={() => setSelectedPost(item)}
       >
         <View style={styles.postHeader}>
           <Text style={styles.postCategory}>{item.category}</Text>
@@ -123,7 +111,6 @@ export default function HomeScreen() {
             source={{ uri: item.imageUrl }} 
             style={styles.postImage}
             resizeMode="cover"
-            onError={() => console.log('Failed to load image')}
           />
         ) : (
           <View style={[styles.postImage, styles.emptyImage]}>
@@ -131,50 +118,40 @@ export default function HomeScreen() {
           </View>
         )}
 
-      <View style={styles.postContent}>
-        <TouchableOpacity 
-          style={styles.usernameContainer}
-          onPress={() => console.log('Profile link pressed')}
-        >
-          <Text style={styles.username}>{item.username || 'Anonymous'}</Text>
-        </TouchableOpacity>
-        <Text style={styles.postTitle}>{item.description}</Text>
-      </View>
-      
-      <View style={styles.postDetails}>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Size:</Text>
-          <Text style={styles.detailValue}>{item.size}</Text>
+        <View style={styles.postContent}>
+          <TouchableOpacity 
+            style={styles.usernameContainer}
+          >
+            <Text style={styles.username}>{item.username || 'Anonymous'}</Text>
+          </TouchableOpacity>
+          <Text style={styles.postTitle}>{item.description}</Text>
         </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Color:</Text>
-          <Text style={styles.detailValue}>{item.color}</Text>
+        
+        <View style={styles.postDetails}>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Size:</Text>
+            <Text style={styles.detailValue}>{item.size}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Color:</Text>
+            <Text style={styles.detailValue}>{item.color}</Text>
+          </View>
+          <Text style={[
+            styles.badge,
+            item.availability ? styles.available : styles.borrowed
+          ]}>
+            {item.availability ? 'Available' : 'Unavailable'}
+          </Text>
         </View>
-        <Text style={[
-          styles.badge,
-          item.availability ? styles.available : styles.borrowed
-        ]}>
-          {item.availability ? 'Available' : 'Unavailable'}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   const filteredPosts = posts.filter(post => {
-    console.log('Filtering post:', post);
-    console.log('Current category:', category);
-    console.log('Current search term:', searchTerm);
-    
     const matchesCategory = category === 'All' || post.category === category.toLowerCase();
     const matchesSearch = !searchTerm || post.description.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    console.log('Matches category:', matchesCategory);
-    console.log('Matches search:', matchesSearch);
-    
     return matchesCategory && matchesSearch;
   });
-
-  console.log('Filtered posts length:', filteredPosts.length);
 
   if (postLoading) {
     return (
@@ -247,20 +224,6 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  postContent: {
-    flex: 1,
-    padding: 10,
-    justifyContent: 'space-between',
-  },
-  usernameContainer: {
-    marginBottom: 8,
-  },
-  username: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#007AFF',
-    textDecorationLine: 'underline',
-  },
   container: { 
     flex: 1, 
     backgroundColor: '#FFFFFF' 
@@ -296,11 +259,6 @@ const styles = StyleSheet.create({
     minHeight: 50,
   },
   chip: {
-    // paddingHorizontal: 12,
-    // paddingVertical: 6,
-    // borderRadius: 16,
-    // backgroundColor: '#E5E7EB',
-    // marginRight: 8,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
@@ -316,26 +274,7 @@ const styles = StyleSheet.create({
     minWidth: 80,
   },
   chipActive: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
     backgroundColor: '#6C63FF',
-    marginRight: 8,
-    shadowColor: '#6C63FF',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-    elevation: 1,
-    justifyContent: 'center',
-    minHeight: 36,
-    minWidth: 80,
-
-    // backgroundColor: '#6C63FF',
-    // shadowColor: '#6C63FF',
-    // shadowOpacity: 0.2,
-    // shadowOffset: { width: 0, height: 2 },
-    // shadowRadius: 2,
-    // elevation: 2,
   },
   chipText: {
     fontSize: 14,
@@ -381,6 +320,20 @@ const styles = StyleSheet.create({
     height: 300,
     borderRadius: 8,
     marginBottom: 12,
+  },
+  postContent: {
+    flex: 1,
+    padding: 10,
+    justifyContent: 'space-between',
+  },
+  usernameContainer: {
+    marginBottom: 8,
+  },
+  username: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
+    textDecorationLine: 'underline',
   },
   postTitle: {
     fontSize: 16,
@@ -434,6 +387,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 32,
     color: '#6B7280',
-    fontSize: 16,
+    fontSize: 16
   }
 });
