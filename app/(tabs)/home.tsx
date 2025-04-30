@@ -22,7 +22,17 @@ const CARD_MARGIN = 8;
 const NUM_COLUMNS = 2;
 const CARD_WIDTH = (width - CARD_MARGIN * (NUM_COLUMNS + 1)) / NUM_COLUMNS;
 
-const CATEGORIES = ['All', 'Formal', 'Casual'];
+const CATEGORIES = [
+  'All',
+  'Formal',
+  'Casual',
+  'Going Out',
+  'Athleisure',
+  'Loungewear',
+  'Outerwear',
+  'Vacation',
+  'Workwear'
+];
 
 interface Post {
   id: string;
