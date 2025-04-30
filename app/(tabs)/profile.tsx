@@ -574,14 +574,6 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleItemPress = (item: ClosetItem) => {
-    console.log('Navigating to edit listing with ID:', item.id); // Debug log
-    router.push({
-      pathname: '/edit-listing',
-      params: { id: item.id }
-    });
-  };
-
   const handleImageError = (itemId: string): void => {
     setImageLoadErrors(prev => new Set([...prev, itemId]));
   };
@@ -635,15 +627,6 @@ export default function ProfileScreen() {
       <View style={styles.itemInfoContainer}>
         <View style={styles.itemHeader}>
           <Text style={styles.itemTitle} numberOfLines={2}>{item.title}</Text>
-          <TouchableOpacity 
-            style={styles.editIcon}
-            onPress={(e) => {
-              e.stopPropagation();
-              handleItemPress(item);
-            }}
-          >
-            <Ionicons name="create-outline" size={20} color="#6C63FF" />
-          </TouchableOpacity>
         </View>
         <Text style={styles.itemCategory} numberOfLines={2}>{item.category}</Text>
         <View style={styles.itemDetails}>

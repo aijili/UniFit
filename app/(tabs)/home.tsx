@@ -259,14 +259,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: CARD_MARGIN,
     paddingVertical: 12,
+    marginBottom: 12,
     minHeight: 50,
+    maxHeight:50
   },
   chip: {
-    // paddingHorizontal: 12,
-    // paddingVertical: 6,
-    // borderRadius: 16,
-    // backgroundColor: '#E5E7EB',
-    // marginRight: 8,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
@@ -294,14 +291,7 @@ const styles = StyleSheet.create({
     elevation: 1,
     justifyContent: 'center',
     minHeight: 36,
-    minWidth: 80,
-
-    // backgroundColor: '#6C63FF',
-    // shadowColor: '#6C63FF',
-    // shadowOpacity: 0.2,
-    // shadowOffset: { width: 0, height: 2 },
-    // shadowRadius: 2,
-    // elevation: 2,
+    minWidth: 80
   },
   chipText: {
     fontSize: 14,
