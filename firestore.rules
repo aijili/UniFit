@@ -26,7 +26,7 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
       allow update, delete: if isAuthenticated() && 
-        (resource.data.ownerId == request.auth.uid);
+        (resource.data.uid == request.auth.uid);
     }
 
     // Posts collection

@@ -28,14 +28,16 @@ import {
   setDoc,
   serverTimestamp,
   DocumentData,
+  Unsubscribe,
 } from 'firebase/firestore';
 import { signOut, User } from 'firebase/auth';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
+// import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 import { ImagePickerResult, ImagePickerAsset } from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+// import * as FileSystem from 'expo-file-system';
 import ListingModal from '../../components/ListingModal';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 // Type definitions
 interface ClosetItem {
@@ -45,10 +47,13 @@ interface ClosetItem {
   size: string;
   price: number;
   availability: boolean;
-  imageUrl?: string;
+  picture?: string;
   description: string;
   color: string;
-  url?: string;
+  url?: string | null;
+  uid: string;
+  createdAt?: any;
+  updatedAt?: any;
 }
 
 interface UserData {
@@ -220,26 +225,36 @@ const styles = StyleSheet.create({
   itemInfoContainer: {
     padding: 12,
   },
+  itemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   itemTitle: {
     fontSize: 15,
     fontWeight: '600',
     color: '#111827',
-    marginBottom: 4,
+    flex: 1,
+    marginRight: 8,
   },
   itemCategory: {
     fontSize: 13,
     color: '#6B7280',
     marginBottom: 6,
+    flex: 1,
   },
   itemDetails: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 6,
+    flexWrap: 'wrap',
   },
   itemSize: {
     fontSize: 13,
     color: '#4B5563',
     fontWeight: '500',
+    marginRight: 8,
   },
   itemPrice: {
     fontSize: 13,
@@ -370,6 +385,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  editIcon: {
+    padding: 4,
+  },
 });
 
 export default function ProfileScreen() {
@@ -391,11 +409,11 @@ export default function ProfileScreen() {
   const [newBio, setNewBio] = useState<string>('');
   const [selectedItem, setSelectedItem] = useState<ClosetItem | null>(null);
 
-  const fetchProfile = async (showFullScreenLoading: boolean = true): Promise<void> => {
+  const fetchProfile = async (showFullScreenLoading: boolean = true): Promise<Unsubscribe | undefined> => {
     const user: User | null = auth.currentUser;
     if (!user) {
       router.replace('/login');
-      return;
+      return undefined;
     }
 
     if (showFullScreenLoading) setLoading(true);
@@ -429,56 +447,38 @@ export default function ProfileScreen() {
       setNewAvatarUrl(userData.avatarUrl || '');
       setNewBio(userData.bio || '');
 
-      // Try different collection names
-      const collectionNames = ['items', 'posts', 'closet', 'closetItems'];
+      const itemsRef = collection(db, 'posts');
+      const allItemsSnapshot = await getDocs(itemsRef);
       
-      for (const collectionName of collectionNames) {
-        try {
-          const itemsRef = collection(db, collectionName);
-          const allItemsSnapshot = await getDocs(itemsRef);
-          
-          console.log(`Checking collection "${collectionName}":`, {
-            totalItems: allItemsSnapshot.size,
-            items: allItemsSnapshot.docs.map(doc => ({
-              id: doc.id,
-              data: doc.data()
-            }))
-          });
+      const userItems: ClosetItem[] = allItemsSnapshot.docs
+        .filter(doc => {
+          const data = doc.data();
+          return data.uid === user.uid;
+        })
+        .map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            title: data.description || '',
+            category: data.category || '',
+            size: data.size || '',
+            price: data.price || 0,
+            availability: data.availability || false,
+            picture: data.picture || '',
+            description: data.description || '',
+            color: data.color || '',
+            url: data.url || null,
+            uid: data.uid || '',
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+          };
+        });
 
-          const userItems: ClosetItem[] = allItemsSnapshot.docs
-            .filter(doc => {
-              const data = doc.data();
-              return data.uid === user.uid;
-            })
-            .map(doc => {
-              const data = doc.data();
-              return {
-                id: doc.id,
-                title: data.description || '',
-                category: data.category || '',
-                size: data.size || '',
-                price: data.price || 0,
-                availability: data.availability || false,
-                imageUrl: data.picture || '',
-                description: data.description || '',
-                color: data.color || '',
-                url: data.url || '',
-              };
-            });
-
-          if (userItems.length > 0) {
-            console.log(`Found items in collection "${collectionName}":`, userItems);
-            setClosetItems(userItems);
-            break;
-          }
-        } catch (err) {
-          console.log(`Error checking collection "${collectionName}":`, err);
-        }
-      }
+      setClosetItems(userItems);
 
       const [borrowedSnap, lentSnap] = await Promise.all([
         getDocs(query(collection(db, 'items'), where('borrowerId', '==', user.uid))),
-        getDocs(query(collection(db, 'items'), where('ownerId', '==', user.uid))),
+        getDocs(query(collection(db, 'items'), where('uid', '==', user.uid))),
       ]);
 
       const borrowedCount: number = userData.borrowedCount ?? borrowedSnap.size;
@@ -495,6 +495,8 @@ export default function ProfileScreen() {
       setLoading(false);
       setRefreshing(false);
     }
+
+    return undefined;
   };
 
   useEffect(() => {
@@ -514,98 +516,41 @@ export default function ProfileScreen() {
   }, []);
 
   const pickAndUploadImage = async (): Promise<void> => {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Please allow access to your photos to upload a profile picture.');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.7,
-        base64: false,
-      });
-
-      if (!result.canceled && result.assets && result.assets[0]) {
-        const user = auth.currentUser;
-        if (!user) return;
-
-        // Show loading indicator
-        Alert.alert('Uploading', 'Please wait while we upload your profile picture...', [], { cancelable: false });
-
-        const storage = getStorage();
-        const imageRef = ref(storage, `profile_pictures/${user.uid}`);
-        
-        // Get file info
-        const fileInfo = await FileSystem.getInfoAsync(result.assets[0].uri);
-        if (!fileInfo.exists) {
-          throw new Error('Selected file does not exist');
-        }
-
-        // Read the file as base64
-        const base64 = await FileSystem.readAsStringAsync(result.assets[0].uri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-
-        // Convert base64 to Uint8Array
-        const bytes = new Uint8Array(base64.length);
-        for (let i = 0; i < base64.length; i++) {
-          bytes[i] = base64.charCodeAt(i);
-        }
-
-        // Add metadata to the upload
-        const metadata = {
-          contentType: 'image/jpeg',
-          customMetadata: {
-            'uploadedBy': user.uid,
-            'uploadedAt': new Date().toISOString(),
-          },
-        };
-
-        try {
-          // Upload with metadata
-          await uploadBytes(imageRef, bytes, metadata);
-          const downloadURL = await getDownloadURL(imageRef);
-          
-          // Update user document
-          await setDoc(doc(db, 'users', user.uid), {
-            avatarUrl: downloadURL,
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'Please allow access to your photos.');
+      return;
+    }
+  
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+  
+    if (!result.canceled && result.assets && result.assets[0]) {
+      const user = auth.currentUser;
+      if (!user) return;
+  
+      const localUri = result.assets[0].uri;
+  
+      try {
+        await setDoc(
+          doc(db, 'users', user.uid),
+          {
+            avatarUrl: localUri,
             updatedAt: serverTimestamp(),
-          }, { merge: true });
-          
-          setAvatarUrl(downloadURL);
-          Alert.alert('Success', 'Profile picture updated successfully!');
-        } catch (uploadError) {
-          console.error('Upload error:', uploadError);
-          throw new Error('Failed to upload image to storage');
-        }
+          },
+          { merge: true }
+        );
+        setAvatarUrl(localUri);
+        setNewAvatarUrl(localUri);
+        Alert.alert('Success', 'Profile picture updated!');
+      } catch (error) {
+        console.error('Failed to update avatarUrl:', error);
+        Alert.alert('Error', 'Failed to save profile picture. Try again.');
       }
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      let errorMessage = 'Failed to upload profile picture. Please try again.';
-      
-      if (error instanceof Error) {
-        if (error.message.includes('storage/unknown')) {
-          errorMessage = 'Network error occurred. Please check your internet connection and try again.';
-        } else if (error.message.includes('storage/unauthorized')) {
-          errorMessage = 'You are not authorized to upload images. Please sign in again.';
-        } else if (error.message.includes('storage/canceled')) {
-          errorMessage = 'Upload was canceled. Please try again.';
-        } else if (error.message.includes('storage/retry-limit-exceeded')) {
-          errorMessage = 'Upload failed after multiple attempts. Please try again later.';
-        } else if (error.message.includes('Failed to fetch image data')) {
-          errorMessage = 'Failed to process the selected image. Please try selecting a different image.';
-        } else if (error.message.includes('Failed to upload image to storage')) {
-          errorMessage = 'Failed to upload the image. Please check your internet connection and try again.';
-        } else if (error.message.includes('Selected file does not exist')) {
-          errorMessage = 'The selected image could not be found. Please try selecting a different image.';
-        }
-      }
-      
-      Alert.alert('Error', errorMessage);
     }
   };
   
@@ -629,22 +574,56 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleItemPress = (item: ClosetItem): void => {
-    setSelectedItem(item);
+  const handleItemPress = (item: ClosetItem) => {
+    console.log('Navigating to edit listing with ID:', item.id); // Debug log
+    router.push({
+      pathname: '/edit-listing',
+      params: { id: item.id }
+    });
   };
 
   const handleImageError = (itemId: string): void => {
     setImageLoadErrors(prev => new Set([...prev, itemId]));
   };
 
+  const handleUpdateListing = async (updatedItem: ClosetItem) => {
+    if (!updatedItem) return;
+
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      // Update the item in Firestore
+      await setDoc(doc(db, 'posts', updatedItem.id), {
+        ...updatedItem,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+
+      // Update the local state
+      setClosetItems(prevItems => 
+        prevItems.map(item => 
+          item.id === updatedItem.id ? updatedItem : item
+        )
+      );
+
+      Alert.alert('Success', 'Listing updated successfully!');
+    } catch (error) {
+      console.error('Error updating listing:', error);
+      Alert.alert('Error', 'Failed to update listing. Please try again.');
+    }
+  };
+
   const renderItem = ({ item }: { item: ClosetItem }) => (
     <TouchableOpacity
       style={styles.closetItem}
-      onPress={() => handleItemPress(item)}
+      onPress={() => {
+        console.log('Closet item pressed:', item);
+        setSelectedItem(item);
+      }}
     >
-      {item.imageUrl && !imageLoadErrors.has(item.id) ? (
+      {item.picture && !imageLoadErrors.has(item.id) ? (
         <Image
-          source={{ uri: item.imageUrl }}
+          source={{ uri: item.picture }}
           style={styles.closetImage}
           onError={() => handleImageError(item.id)}
         />
@@ -654,11 +633,22 @@ export default function ProfileScreen() {
         </View>
       )}
       <View style={styles.itemInfoContainer}>
-        <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.itemCategory} numberOfLines={1}>{item.category}</Text>
+        <View style={styles.itemHeader}>
+          <Text style={styles.itemTitle} numberOfLines={2}>{item.title}</Text>
+          <TouchableOpacity 
+            style={styles.editIcon}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleItemPress(item);
+            }}
+          >
+            <Ionicons name="create-outline" size={20} color="#6C63FF" />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.itemCategory} numberOfLines={2}>{item.category}</Text>
         <View style={styles.itemDetails}>
           <Text style={styles.itemSize}>{item.size}</Text>
-          <Text style={styles.itemPrice}>${item.price}</Text>
+          <Text style={styles.itemPrice}>${item.price} / day</Text>
         </View>
         <View style={styles.availabilityBadge}>
           <View
@@ -795,6 +785,8 @@ export default function ProfileScreen() {
         visible={!!selectedItem}
         onClose={() => setSelectedItem(null)}
         item={selectedItem}
+        onSave={handleUpdateListing}
+        isOwner={true}
       />
     </SafeAreaView>
   );

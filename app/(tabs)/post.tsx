@@ -134,7 +134,7 @@ export default function PostScreen() {
       // Create post document
       const postId = `${user.uid}-${Date.now()}`;
       await setDoc(doc(db, 'posts', postId), {
-        ownerId: user.uid,
+        uid: user.uid,
         picture, // This is just the local URI
         category,
         color,
