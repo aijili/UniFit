@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  ScrollView,
 } from 'react-native';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
@@ -31,7 +32,8 @@ const CATEGORIES = [
   'Loungewear',
   'Outerwear',
   'Vacation',
-  'Workwear'
+  'Workwear',
+  'Costume'
 ];
 
 interface Post {
@@ -185,7 +187,11 @@ export default function HomeScreen() {
         />
       </View>
 
-      <View style={styles.chipRow}>
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chipRow}
+      >
         {CATEGORIES.map(cat => (
           <TouchableOpacity
             key={cat}
@@ -203,7 +209,7 @@ export default function HomeScreen() {
             </Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
 
       <FlatList
         data={filteredPosts}
@@ -251,25 +257,40 @@ const styles = StyleSheet.create({
   chipRow: {
     flexDirection: 'row',
     paddingHorizontal: CARD_MARGIN,
-    marginBottom: CARD_MARGIN,
+    paddingVertical: 12,
+    minHeight: 50,
   },
   chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
     backgroundColor: '#E5E7EB',
     marginRight: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 1,
+    justifyContent: 'center',
+    minHeight: 36,
+    minWidth: 80,
   },
   chipActive: {
     backgroundColor: '#6C63FF',
+    shadowColor: '#6C63FF',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 2,
+    elevation: 2,
   },
   chipText: {
     fontSize: 14,
     color: '#374151',
+    textAlign: 'center',
+    fontWeight: '500',
   },
   chipTextActive: {
     color: '#FFFFFF',
-    fontWeight: '500',
   },
   list: {
     paddingHorizontal: CARD_MARGIN,
