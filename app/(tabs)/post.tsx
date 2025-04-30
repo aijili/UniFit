@@ -220,10 +220,24 @@ export default function PostUploadScreen() {
         <FlatList
           data={assets}
           keyExtractor={(item) => item.id}
-          renderItem={renderItem}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.photoItem}
+              onPress={() => setSelected(item)}
+            >
+              <Image
+                source={{ uri: item.uri }}
+                style={styles.photo}
+              />
+              {selected?.id === item.id && (
+                <View style={styles.selectedOverlay}>
+                  <Text style={styles.selectedText}>Selected</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
           numColumns={NUM_COLUMNS}
           contentContainerStyle={styles.grid}
-          scrollEnabled={false}
         />
 
         {/* Permission Modal */}
@@ -259,6 +273,33 @@ export default function PostUploadScreen() {
 }
 
 const styles = StyleSheet.create({
+  photoItem: {
+    width: CARD_WIDTH,
+    height: CARD_WIDTH,
+    margin: CARD_MARGIN,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  photo: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  selectedOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectedText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   safe: { flex: 1, backgroundColor: '#FFF' },
   header: {
     height: 56,

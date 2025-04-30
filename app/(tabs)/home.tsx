@@ -14,7 +14,7 @@ import {
   Linking,
   ScrollView,
 } from 'react-native';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import ListingModal from '../../components/ListingModal';
@@ -48,6 +48,7 @@ interface Post {
   size: string;
   availability: boolean;
   url: string;
+  username?: string;
 }
 
 export default function HomeScreen() {
@@ -82,6 +83,7 @@ export default function HomeScreen() {
               size: data.size?.toUpperCase() || 'N/A',
               availability: data.availability ?? true,
               url: data.url || '',
+              username: data.username || '',
             } as Post;
           });
           
@@ -129,27 +131,34 @@ export default function HomeScreen() {
           </View>
         )}
 
+      <View style={styles.postContent}>
+        <TouchableOpacity 
+          style={styles.usernameContainer}
+          onPress={() => console.log('Profile link pressed')}
+        >
+          <Text style={styles.username}>{item.username || 'Anonymous'}</Text>
+        </TouchableOpacity>
         <Text style={styles.postTitle}>{item.description}</Text>
-        
-        <View style={styles.postDetails}>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Size:</Text>
-            <Text style={styles.detailValue}>{item.size}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Color:</Text>
-            <Text style={styles.detailValue}>{item.color}</Text>
-          </View>
-          <Text style={[
-            styles.badge,
-            item.availability ? styles.available : styles.borrowed
-          ]}>
-            {item.availability ? 'Available' : 'Unavailable'}
-          </Text>
+      </View>
+      
+      <View style={styles.postDetails}>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Size:</Text>
+          <Text style={styles.detailValue}>{item.size}</Text>
         </View>
-      </TouchableOpacity>
-    );
-  };
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Color:</Text>
+          <Text style={styles.detailValue}>{item.color}</Text>
+        </View>
+        <Text style={[
+          styles.badge,
+          item.availability ? styles.available : styles.borrowed
+        ]}>
+          {item.availability ? 'Available' : 'Unavailable'}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
 
   const filteredPosts = posts.filter(post => {
     console.log('Filtering post:', post);
@@ -238,6 +247,20 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  postContent: {
+    flex: 1,
+    padding: 10,
+    justifyContent: 'space-between',
+  },
+  usernameContainer: {
+    marginBottom: 8,
+  },
+  username: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
+    textDecorationLine: 'underline',
+  },
   container: { 
     flex: 1, 
     backgroundColor: '#FFFFFF' 
