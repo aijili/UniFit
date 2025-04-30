@@ -12,6 +12,7 @@ import {
   Alert,
   RefreshControl,
   ListRenderItem,
+  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { auth, db } from '../../firebaseConfig.js';
@@ -33,6 +34,8 @@ interface ClosetItem {
 }
 
 export default function ProfileScreen() {
+  const [user, setUser] = useState<any>(null);
+  const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [username, setUsername] = useState('');
@@ -42,8 +45,8 @@ export default function ProfileScreen() {
   const [imageLoadErrors, setImageLoadErrors] = useState<Set<string>>(new Set());
 
   const fetchProfile = async (showFullScreenLoading = true) => {
-    const user = auth.currentUser;
-    if (!user) {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
       router.replace('/login');
       return;
     }
@@ -54,14 +57,14 @@ export default function ProfileScreen() {
 
     try {
       // 1) get user doc
-      const userRef = doc(db, 'users', user.uid);
+      const userRef = doc(db, 'users', currentUser.uid);
       let userSnap = await getDoc(userRef);
       
       if (!userSnap.exists()) {
         // Create user document if it doesn't exist
         await setDoc(userRef, {
-          email: user.email,
-          username: user.email?.split('@')[0] || 'User',
+          email: currentUser.email,
+          username: currentUser.email?.split('@')[0] || 'User',
           createdAt: serverTimestamp(),
           borrowedCount: 0,
           lentCount: 0,
@@ -81,14 +84,14 @@ export default function ProfileScreen() {
         throw new Error('User data is undefined');
       }
 
-      setUsername(userData.username || user.email?.split('@')[0] || 'User');
+      setUsername(userData.username || currentUser.email?.split('@')[0] || 'User');
       setAvatarUrl(userData.avatarUrl || null);
       
       // 2) get user stats
       const itemsRef = collection(db, 'items');
       const [borrowedSnap, lentSnap] = await Promise.all([
-        getDocs(query(itemsRef, where('borrowerId', '==', user.uid))),
-        getDocs(query(itemsRef, where('ownerId', '==', user.uid))),
+        getDocs(query(itemsRef, where('borrowerId', '==', currentUser.uid))),
+        getDocs(query(itemsRef, where('ownerId', '==', currentUser.uid))),
       ]);
 
       // Use stored counts if they exist, otherwise use real-time counts
@@ -118,6 +121,18 @@ export default function ProfileScreen() {
       });
       setClosetItems(userItems);
 
+      // Fetch user's posts
+      const postsQuery = query(
+        collection(db, 'posts'),
+        where('userId', '==', currentUser.uid)
+      );
+      const postsSnapshot = await getDocs(postsQuery);
+      const userPosts = postsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setPosts(userPosts);
+
     } catch (err) {
       console.error('Profile fetch error:', err);
       Alert.alert(
@@ -139,7 +154,7 @@ export default function ProfileScreen() {
     fetchProfile(false);
   };
 
-  const handleSignOut = async () => {
+  const handleLogout = async () => {
     try {
       await signOut(auth);
       router.replace('/login');
@@ -187,150 +202,134 @@ export default function ProfileScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <FlatList
-        ListHeaderComponent={
-          <>
-            {/* gradient header */}
-            <LinearGradient
-              colors={['#6FE7DD', '#6C63FF']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.header}
-            />
+    <ScrollView style={styles.container}>
+      <View style={styles.header}>
+        <Image
+          source={{ uri: avatarUrl || 'https://via.placeholder.com/150' }}
+          style={styles.profileImage}
+        />
+        <Text style={styles.username}>{username}</Text>
+        <Text style={styles.email}>{user?.email}</Text>
+      </View>
 
-            {/* avatar & name */}
-            <View style={styles.avatarContainer}>
-              <Image
-                source={
-                  avatarUrl
-                    ? { uri: avatarUrl }
-                    : require('../../assets/images/icon.png')
-                }
-                style={styles.avatar}
-                onError={() => setAvatarUrl(null)}
-              />
-              <Text style={styles.username}>{username}</Text>
-            </View>
+      <View style={styles.statsContainer}>
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{stats.borrowed}</Text>
+          <Text style={styles.statLabel}>Borrowed</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{stats.lent}</Text>
+          <Text style={styles.statLabel}>Lent</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>
+            {stats.rating ? stats.rating.toFixed(1) : '—'}
+          </Text>
+          <Text style={styles.statLabel}>Rating</Text>
+        </View>
+      </View>
 
-            {/* stats */}
-            <View style={styles.statsContainer}>
-              <View style={styles.statCard}>
-                <Text style={styles.statNumber}>{stats.borrowed}</Text>
-                <Text style={styles.statLabel}>Borrowed</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statNumber}>{stats.lent}</Text>
-                <Text style={styles.statLabel}>Lent</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statNumber}>
-                  {stats.rating ? stats.rating.toFixed(1) : '—'}
-                </Text>
-                <Text style={styles.statLabel}>Rating</Text>
-              </View>
-            </View>
-
-            {/* closet title */}
-            <Text style={styles.sectionTitle}>
-              My Closet ({closetItems.length})
-            </Text>
-          </>
-        }
-        data={closetItems}
-        keyExtractor={item => item.id}
-        renderItem={renderItem}
-        numColumns={NUM_COLUMNS}
-        contentContainerStyle={styles.closetList}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor="#6C63FF"
-          />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>
-              No items in your closet yet.
-            </Text>
-          </View>
-        }
-        ListFooterComponent={
-          <TouchableOpacity 
-            style={styles.signOutButton} 
-            onPress={handleSignOut}
-          >
-            <Text style={styles.signOutText}>Sign Out</Text>
+      <View style={styles.postsGrid}>
+        {posts.map((post) => (
+          <TouchableOpacity key={post.id} style={styles.postItem}>
+            <Image source={{ uri: post.imageUrl }} style={styles.postImage} />
           </TouchableOpacity>
-        }
-      />
-    </SafeAreaView>
+        ))}
+      </View>
+
+      <View style={styles.closetList}>
+        <Text style={styles.sectionTitle}>
+          My Closet ({closetItems.length})
+        </Text>
+        <FlatList
+          data={closetItems}
+          keyExtractor={item => item.id}
+          renderItem={renderItem}
+          numColumns={NUM_COLUMNS}
+          contentContainerStyle={styles.closetList}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor="#6C63FF"
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>
+                No items in your closet yet.
+              </Text>
+            </View>
+          }
+        />
+      </View>
+
+      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+        <Text style={styles.logoutButtonText}>Log Out</Text>
+      </TouchableOpacity>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#FFF' 
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
   },
   header: {
-    height: 180,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  avatarContainer: {
-    position: 'absolute',
-    top: 120,
-    left: 0,
-    right: 0,
     alignItems: 'center',
+    padding: 20,
+    backgroundColor: 'white',
+    marginBottom: 10,
   },
-  avatar: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 4,
-    borderColor: '#FFF',
-    backgroundColor: '#EEE',
+  profileImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    marginBottom: 10,
   },
   username: {
-    marginTop: 12,
     fontSize: 24,
-    fontWeight: '700',
-    color: '#111827',
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  email: {
+    fontSize: 16,
+    color: '#666',
   },
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginTop: 24,
-    paddingHorizontal: 16,
+    padding: 15,
+    backgroundColor: 'white',
+    marginBottom: 10,
   },
-  statCard: {
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
+  statItem: {
     alignItems: 'center',
-    paddingVertical: 12,
-    flex: 1,
-    marginHorizontal: 4,
   },
   statNumber: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#111827',
+    fontWeight: 'bold',
   },
   statLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 4,
+    fontSize: 14,
+    color: '#666',
   },
-  sectionTitle: {
-    marginTop: 32,
-    marginHorizontal: 16,
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
+  postsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 2,
+  },
+  postItem: {
+    width: '33.33%',
+    aspectRatio: 1,
+    padding: 2,
+  },
+  postImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 5,
   },
   closetList: {
     paddingHorizontal: ITEM_MARGIN,
@@ -371,17 +370,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
   },
-  signOutButton: {
-    marginHorizontal: 16,
-    marginVertical: 24,
-    backgroundColor: '#EF4444',
-    borderRadius: 8,
-    paddingVertical: 12,
+  logoutButton: {
+    margin: 20,
+    padding: 15,
+    backgroundColor: '#6C63FF',
+    borderRadius: 10,
     alignItems: 'center',
   },
-  signOutText: {
-    color: '#FFF',
+  logoutButtonText: {
+    color: 'white',
     fontSize: 16,
+    fontWeight: 'bold',
+  },
+  sectionTitle: {
+    marginTop: 32,
+    marginHorizontal: 16,
+    fontSize: 18,
     fontWeight: '600',
+    color: '#111827',
   },
 });
