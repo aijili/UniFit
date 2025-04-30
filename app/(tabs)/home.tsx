@@ -17,6 +17,7 @@ import {
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
+import ListingModal from '../../components/ListingModal';
 
 const { width } = Dimensions.get('window');
 const CARD_MARGIN = 8;
@@ -38,14 +39,14 @@ const CATEGORIES = [
 
 interface Post {
   id: string;
-  availability: boolean;
+  title: string;
   category: string;
   color: string;
   description: string;
-  picture: string;
+  imageUrl: string;
   price: number;
   size: string;
-  uid: string;
+  availability: boolean;
   url: string;
 }
 
@@ -54,6 +55,7 @@ export default function HomeScreen() {
   const [category, setCategory] = useState('All');
   const [posts, setPosts] = useState<Post[]>([]);
   const [postLoading, setPostLoading] = useState(true);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -71,14 +73,14 @@ export default function HomeScreen() {
             console.log('Raw post data:', data);
             return {
               id: doc.id,
-              availability: data.availability ?? true,
+              title: data.description || 'No title',
               category: data.category?.toLowerCase() || 'other',
               color: data.color?.toLowerCase() || 'unknown',
               description: data.description || 'No description',
-              picture: data.picture || '',
+              imageUrl: data.picture || '',
               price: data.price || 0,
               size: data.size?.toUpperCase() || 'N/A',
-              uid: data.uid || '',
+              availability: data.availability ?? true,
               url: data.url || '',
             } as Post;
           });
@@ -99,51 +101,55 @@ export default function HomeScreen() {
     return () => { isMounted = false };
   }, []);
 
-  const renderPost = ({ item }: { item: Post }) => (
-    <TouchableOpacity 
-      style={styles.postCard}
-      onPress={() => {
-        if (item.url) Linking.openURL(item.url);
-      }}
-    >
-      <View style={styles.postHeader}>
-        <Text style={styles.postCategory}>{item.category}</Text>
-        <Text style={styles.postPrice}>${item.price} / day</Text>
-      </View>
-      
-      {item.picture ? (
-        <Image 
-          source={{ uri: item.picture }} 
-          style={styles.postImage}
-          resizeMode="cover"
-          onError={() => console.log('Failed to load image')}
-        />
-      ) : (
-        <View style={[styles.postImage, styles.emptyImage]}>
-          <Ionicons name="image-outline" size={40} color="#9CA3AF" />
+  const renderPost = ({ item }: { item: Post }) => {
+    console.log('Post data:', item);
+    return (
+      <TouchableOpacity 
+        style={styles.postCard}
+        onPress={() => {
+          console.log('Selected post:', item);
+          setSelectedPost(item);
+        }}
+      >
+        <View style={styles.postHeader}>
+          <Text style={styles.postCategory}>{item.category}</Text>
+          <Text style={styles.postPrice}>${item.price} / day</Text>
         </View>
-      )}
+        
+        {item.imageUrl ? (
+          <Image 
+            source={{ uri: item.imageUrl }} 
+            style={styles.postImage}
+            resizeMode="cover"
+            onError={() => console.log('Failed to load image')}
+          />
+        ) : (
+          <View style={[styles.postImage, styles.emptyImage]}>
+            <Ionicons name="image-outline" size={40} color="#9CA3AF" />
+          </View>
+        )}
 
-      <Text style={styles.postTitle}>{item.description}</Text>
-      
-      <View style={styles.postDetails}>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Size:</Text>
-          <Text style={styles.detailValue}>{item.size}</Text>
+        <Text style={styles.postTitle}>{item.description}</Text>
+        
+        <View style={styles.postDetails}>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Size:</Text>
+            <Text style={styles.detailValue}>{item.size}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Color:</Text>
+            <Text style={styles.detailValue}>{item.color}</Text>
+          </View>
+          <Text style={[
+            styles.badge,
+            item.availability ? styles.available : styles.borrowed
+          ]}>
+            {item.availability ? 'Available' : 'Unavailable'}
+          </Text>
         </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Color:</Text>
-          <Text style={styles.detailValue}>{item.color}</Text>
-        </View>
-        <Text style={[
-          styles.badge,
-          item.availability ? styles.available : styles.borrowed
-        ]}>
-          {item.availability ? 'Available' : 'Unavailable'}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   const filteredPosts = posts.filter(post => {
     console.log('Filtering post:', post);
@@ -220,6 +226,12 @@ export default function HomeScreen() {
         ListEmptyComponent={
           <Text style={styles.emptyText}>No posts found matching your criteria</Text>
         }
+      />
+
+      <ListingModal
+        visible={!!selectedPost}
+        onClose={() => setSelectedPost(null)}
+        item={selectedPost}
       />
     </SafeAreaView>
   );
