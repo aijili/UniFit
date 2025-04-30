@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { auth, db } from '../../firebaseConfig.js';
-import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, where, setDoc, serverTimestamp } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { router } from 'expo-router';
 
@@ -55,13 +55,32 @@ export default function ProfileScreen() {
     try {
       // 1) get user doc
       const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
+      let userSnap = await getDoc(userRef);
       
       if (!userSnap.exists()) {
-        throw new Error('User document not found');
+        // Create user document if it doesn't exist
+        await setDoc(userRef, {
+          email: user.email,
+          username: user.email?.split('@')[0] || 'User',
+          createdAt: serverTimestamp(),
+          borrowedCount: 0,
+          lentCount: 0,
+          rating: 0,
+          reviewCount: 0,
+          totalRating: 0
+        });
+        // Get the newly created document
+        userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) {
+          throw new Error('Failed to create user document');
+        }
       }
 
       const userData = userSnap.data();
+      if (!userData) {
+        throw new Error('User data is undefined');
+      }
+
       setUsername(userData.username || user.email?.split('@')[0] || 'User');
       setAvatarUrl(userData.avatarUrl || null);
       
@@ -72,8 +91,9 @@ export default function ProfileScreen() {
         getDocs(query(itemsRef, where('ownerId', '==', user.uid))),
       ]);
 
-      const borrowedCount = borrowedSnap.size;
-      const lentCount = lentSnap.size;
+      // Use stored counts if they exist, otherwise use real-time counts
+      const borrowedCount = userData.borrowedCount ?? borrowedSnap.size;
+      const lentCount = userData.lentCount ?? lentSnap.size;
       
       // Calculate rating from reviews if they exist
       let rating = userData.rating || 0;

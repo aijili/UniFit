@@ -21,6 +21,24 @@ service cloud.firestore {
       allow update, delete: if isOwner(userId);
     }
     
+    // Items collection
+    match /items/{itemId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && 
+        (resource.data.ownerId == request.auth.uid);
+    }
+
+    // Posts collection
+    match /posts/{postId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() 
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.createdAt != null;
+      allow update, delete: if isAuthenticated() 
+        && resource.data.userId == request.auth.uid;
+    }
+    
     // Default deny
     match /{document=**} {
       allow read, write: if false;
