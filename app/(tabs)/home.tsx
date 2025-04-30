@@ -108,7 +108,7 @@ export default function HomeScreen() {
     >
       <View style={styles.postHeader}>
         <Text style={styles.postCategory}>{item.category}</Text>
-        <Text style={styles.postPrice}>${item.price}</Text>
+        <Text style={styles.postPrice}>${item.price} / day</Text>
       </View>
       
       {item.picture ? (
@@ -261,6 +261,11 @@ const styles = StyleSheet.create({
     minHeight: 50,
   },
   chip: {
+    // paddingHorizontal: 12,
+    // paddingVertical: 6,
+    // borderRadius: 16,
+    // backgroundColor: '#E5E7EB',
+    // marginRight: 8,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
@@ -276,12 +281,26 @@ const styles = StyleSheet.create({
     minWidth: 80,
   },
   chipActive: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
     backgroundColor: '#6C63FF',
+    marginRight: 8,
     shadowColor: '#6C63FF',
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 1,
+    justifyContent: 'center',
+    minHeight: 36,
+    minWidth: 80,
+
+    // backgroundColor: '#6C63FF',
+    // shadowColor: '#6C63FF',
+    // shadowOpacity: 0.2,
+    // shadowOffset: { width: 0, height: 2 },
+    // shadowRadius: 2,
+    // elevation: 2,
   },
   chipText: {
     fontSize: 14,
