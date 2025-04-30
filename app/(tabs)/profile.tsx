@@ -14,6 +14,7 @@ import {
   TextInput,
   ImageErrorEventData,
   NativeSyntheticEvent,
+  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { auth, db } from '../../firebaseConfig';
