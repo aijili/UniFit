@@ -5,37 +5,41 @@ import {
   View,
   TextInput,
   Text,
-  TouchableOpacity,
   FlatList,
   Image,
   StyleSheet,
   SafeAreaView,
+  Dimensions,
+  TouchableOpacity,
   ActivityIndicator,
-  Alert,
-  ListRenderItem,
 } from 'react-native';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../../firebaseConfig.js';
-import { useRouter } from 'expo-router';
+import { db } from '../../firebaseConfig';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+
+const { width } = Dimensions.get('window');
+const CARD_MARGIN = 8;
+const NUM_COLUMNS = 2;
+const CARD_WIDTH = (width - CARD_MARGIN * (NUM_COLUMNS + 1)) / NUM_COLUMNS;
 
 interface Item {
   id: string;
-  title: string;
-  displayTitle?: string;
-  category: string;
-  description?: string;
   imageUrl: string;
+  title: string;
+  category: string;
+  color: string;
+  available: boolean;
 }
 
 export default function SearchScreen() {
-  const router = useRouter();
-  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [results, setResults] = useState<Item[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleSearch = async () => {
-    const term = searchTerm.trim().toLowerCase();
-    if (!term) {
+  const handleSearch = async (term: string) => {
+    setSearchTerm(term);
+    if (!term.trim()) {
       setResults([]);
       return;
     }
@@ -45,86 +49,74 @@ export default function SearchScreen() {
       const itemsRef = collection(db, 'items');
       const q = query(
         itemsRef,
-        where('title', '>=', term),
-        where('title', '<=', term + '\uf8ff')
+        where('title', '>=', term.toLowerCase()),
+        where('title', '<=', term.toLowerCase() + '\uf8ff')
       );
-      // ← no generic here
       const snap = await getDocs(q);
-
-      const fetched: Item[] = snap.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          title: data.title as string,
-          displayTitle: data.displayTitle as string | undefined,
-          category: data.category as string,
-          description: data.description as string | undefined,
-          imageUrl: data.imageUrl as string,
-        };
-      });
-
-      const byDesc = fetched.filter(item =>
-        item.description?.toLowerCase().includes(term)
-      );
-
-      const all = [...fetched, ...byDesc];
-      const unique = Array.from(new Set(all.map(i => i.id))).map(id =>
-        all.find(i => i.id === id)!
-      );
-
-      setResults(unique);
-    } catch (err) {
-      console.error(err);
-      Alert.alert('Search Error', 'Could not fetch items. Please try again.');
+      const items = snap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Item[];
+      setResults(items);
+    } catch (error) {
+      console.error('Search error:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    const handle = setTimeout(handleSearch, 500);
-    return () => clearTimeout(handle);
-  }, [searchTerm]);
-
-  const handleItemPress = (item: Item) => {
-    // Use a type assertion to handle the router.push parameter
-    router.push(`/item/${item.id}` as any);
-  };
-
-  const renderItem: ListRenderItem<Item> = ({ item }) => (
-    <TouchableOpacity
-      style={styles.resultItem}
-      onPress={() => handleItemPress(item)}
+  const renderItem = ({ item }: { item: Item }) => (
+    <TouchableOpacity 
+      style={styles.card}
+      onPress={() => router.push('/item/' + item.id as any)}
     >
-      <Image
-        source={{ uri: item.imageUrl }}
-        style={styles.resultImage}
+      <Image 
+        source={{ uri: item.imageUrl }} 
+        style={styles.image}
+        defaultSource={require('../../assets/images/icon.png')}
       />
-      <View style={styles.resultInfo}>
-        <Text style={styles.resultTitle}>
-          {item.displayTitle ?? item.title}
+      <Text style={styles.occasion}>{item.category}</Text>
+      <Text style={styles.title}>{item.title}</Text>
+      <View style={styles.bottomRow}>
+        <Text style={styles.tag}>{item.color}</Text>
+        <Text
+          style={[
+            styles.badge,
+            item.available ? styles.available : styles.borrowed,
+          ]}
+        >
+          {item.available ? 'Available' : 'Borrowed'}
         </Text>
-        <Text style={styles.resultCategory}>{item.category}</Text>
-        {item.description ? (
-          <Text style={styles.resultDescription} numberOfLines={2}>
-            {item.description}
-          </Text>
-        ) : null}
       </View>
     </TouchableOpacity>
   );
 
   return (
     <SafeAreaView style={styles.container}>
-      <TextInput
-        style={styles.searchInput}
-        placeholder="Search items..."
-        value={searchTerm}
-        onChangeText={setSearchTerm}
-        autoCapitalize="none"
-        returnKeyType="search"
-        onSubmitEditing={handleSearch}
-      />
+      <View style={styles.searchContainer}>
+        <Ionicons 
+          name="search-outline" 
+          size={20} 
+          color="#9CA3AF"
+          style={styles.searchIcon}
+        />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search items..."
+          value={searchTerm}
+          onChangeText={handleSearch}
+          placeholderTextColor="#9CA3AF"
+          autoFocus
+        />
+        {searchTerm ? (
+          <TouchableOpacity 
+            onPress={() => handleSearch('')}
+            style={styles.clearButton}
+          >
+            <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+        ) : null}
+      </View>
 
       {loading ? (
         <View style={styles.loader}>
@@ -135,11 +127,14 @@ export default function SearchScreen() {
           data={results}
           keyExtractor={item => item.id}
           renderItem={renderItem}
+          numColumns={NUM_COLUMNS}
           contentContainerStyle={styles.list}
           ListEmptyComponent={
-            <Text style={styles.emptyText}>
-              {searchTerm ? 'No items found.' : 'Start typing to search.'}
-            </Text>
+            searchTerm ? (
+              <Text style={styles.emptyText}>No items found</Text>
+            ) : (
+              <Text style={styles.emptyText}>Start typing to search...</Text>
+            )
           }
         />
       )}
@@ -148,35 +143,95 @@ export default function SearchScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  searchInput: {
-    margin: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  searchContainer: {
+    margin: CARD_MARGIN,
+    height: 44,
     backgroundColor: '#F3F4F6',
     borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#374151',
+    height: '100%',
+  },
+  clearButton: {
+    marginLeft: 8,
+  },
+  loader: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  list: {
+    padding: CARD_MARGIN,
+  },
+  emptyText: {
+    textAlign: 'center',
+    marginTop: 32,
+    color: '#6B7280',
     fontSize: 16,
   },
-  loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  list: { paddingHorizontal: 16 },
-  resultItem: {
-    flexDirection: 'row',
-    marginBottom: 12,
+  card: {
+    width: CARD_WIDTH,
+    margin: CARD_MARGIN,
     backgroundColor: '#F9FAFB',
     borderRadius: 12,
     overflow: 'hidden',
   },
-  resultImage: {
-    width: 60,
-    height: 60,
+  image: {
+    width: '100%',
+    height: CARD_WIDTH,
+  },
+  occasion: {
+    marginTop: 8,
+    marginHorizontal: 8,
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  title: {
+    marginHorizontal: 8,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  bottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    margin: 8,
+  },
+  tag: {
+    fontSize: 12,
+    color: '#6B7280',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     backgroundColor: '#E5E7EB',
+    borderRadius: 8,
   },
-  resultInfo: {
-    flex: 1,
-    padding: 8,
+  badge: {
+    fontSize: 12,
+    fontWeight: '500',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    overflow: 'hidden',
   },
-  resultTitle: { fontSize: 16, fontWeight: '600', marginBottom: 4 },
-  resultCategory: { fontSize: 14, color: '#6B7280', marginBottom: 4 },
-  resultDescription: { fontSize: 14, color: '#4B5563' },
-  emptyText: { textAlign: 'center', marginTop: 32, color: '#6B7280' },
+  available: {
+    color: '#10B981',
+    backgroundColor: '#D1FAE5',
+  },
+  borrowed: {
+    color: '#EF4444',
+    backgroundColor: '#FEE2E2',
+  },
 });

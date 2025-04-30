@@ -1,26 +1,3 @@
-// import React from 'react';
-// import { View, Text, StyleSheet } from 'react-native';
-
-// export default function ActivityScreen() {
-//   return (
-//     <View style={styles.container}>
-//       <Text style={styles.title}>Activity</Text>
-//     </View>
-//   );
-// }
-
-// const styles = StyleSheet.create({
-//   container: {
-//     flex: 1,
-//     justifyContent: 'center',
-//     alignItems: 'center',
-//     backgroundColor: '#fff',
-//   },
-//   title: {
-//     fontSize: 24,
-//     fontWeight: 'bold',
-//   },
-// }); 
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -32,6 +9,7 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Alert,
+  ListRenderItem,
 } from 'react-native';
 import { auth, db } from '../../firebaseConfig.js';
 import {
@@ -43,10 +21,11 @@ import {
   updateDoc,
   doc,
 } from 'firebase/firestore';
+import { Notification } from '../../hooks/types';
 
 export default function ActivityScreen() {
   const [loading, setLoading] = useState(true);
-  const [notifications, setNotifications] = useState([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
   useEffect(() => {
     const fetchNotifications = async () => {
@@ -62,7 +41,11 @@ export default function ActivityScreen() {
           orderBy('timestamp', 'desc')
         );
         const snap = await getDocs(q);
-        const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const docs = snap.docs.map((d) => ({ 
+          id: d.id, 
+          ...d.data(),
+          timestamp: d.data().timestamp?.toDate() || new Date() 
+        } as Notification));
         setNotifications(docs);
       } catch (err) {
         console.error('Error fetching notifications:', err);
@@ -78,7 +61,7 @@ export default function ActivityScreen() {
     fetchNotifications();
   }, []);
 
-  const handleResponse = async (id, response) => {
+  const handleResponse = async (id: string, response: Notification['status']) => {
     try {
       await updateDoc(doc(db, 'notifications', id), { status: response });
       setNotifications((prev) =>
@@ -93,7 +76,7 @@ export default function ActivityScreen() {
     }
   };
 
-  const renderItem = ({ item }) => {
+  const renderItem: ListRenderItem<Notification> = ({ item }) => {
     const isRequest = item.type === 'borrow_request';
     const message = isRequest
       ? `${item.senderName} wants to borrow your ${item.itemName}`

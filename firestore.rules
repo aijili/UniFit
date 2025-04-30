@@ -15,7 +15,10 @@ service cloud.firestore {
     // Users collection
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow write: if isOwner(userId);
+      // Allow creation of user document during signup
+      allow create: if request.resource.data.email != null 
+        && request.resource.data.createdAt != null;
+      allow update, delete: if isOwner(userId);
     }
     
     // Default deny

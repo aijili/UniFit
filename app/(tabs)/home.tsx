@@ -37,6 +37,7 @@ import {
 } from 'react-native';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebaseConfig.js';
+import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 const CARD_MARGIN = 8;
@@ -63,24 +64,32 @@ export default function HomeScreen() {
 
   // fetch all items from Firestore
   useEffect(() => {
+    let isMounted = true;
     (async () => {
       try {
         const snap = await getDocs(collection(db, 'items'));
-        const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Item[];
-        setItems(data);
-        setFiltered(data);
+        if (isMounted) {
+          const data = snap.docs.map(doc => ({ 
+            id: doc.id, 
+            ...doc.data() 
+          })) as Item[];
+          setItems(data);
+          setFiltered(data);
+        }
       } catch (err) {
         console.error('Error loading home items:', err);
-        Alert.alert(
-          'Error',
-          'Failed to load items. Please check your connection and try again.'
-        );
+        if (isMounted) {
+          Alert.alert(
+            'Error',
+            'Failed to load items. Please check your connection and try again.'
+          );
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     })();
+    return () => { isMounted = false };
   }, []);
-
   // apply search + category filter
   useEffect(() => {
     let result = items;
@@ -105,6 +114,7 @@ export default function HomeScreen() {
         source={{ uri: item.imageUrl }} 
         style={styles.image}
         defaultSource={require('../../assets/images/icon.png')}
+        onError={() => console.log('Image failed to load')}
       />
       <Text style={styles.occasion}>{item.category}</Text>
       <Text style={styles.title}>{item.title}</Text>
@@ -132,12 +142,21 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <TextInput
-        style={styles.searchInput}
-        placeholder="Search"
-        value={searchTerm}
-        onChangeText={setSearchTerm}
-      />
+      <View style={styles.searchContainer}>
+        <Ionicons 
+          name="search-outline" 
+          size={20} 
+          color="#9CA3AF"
+          style={styles.searchIcon}
+        />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search"
+          value={searchTerm}
+          onChangeText={setSearchTerm}
+          placeholderTextColor="#9CA3AF"
+        />
+      </View>
 
       <View style={styles.chipRow}>
         {CATEGORIES.map(cat => (
@@ -179,14 +198,24 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  searchInput: {
+  searchContainer: {
     margin: CARD_MARGIN,
-    paddingHorizontal: 16,
     height: 44,
     backgroundColor: '#F3F4F6',
     borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
     fontSize: 16,
     color: '#374151',
+    height: '100%',
+    paddingVertical: 8,
   },
   chipRow: {
     flexDirection: 'row',

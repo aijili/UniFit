@@ -1,7 +1,7 @@
-import { Tabs } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { Platform, View } from "react-native";
-import { BlurView } from "expo-blur";
+import { Tabs } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { Platform, View } from 'react-native';
+import { BlurView } from 'expo-blur';
 
 export default function TabLayout() {
   return (
@@ -21,17 +21,24 @@ export default function TabLayout() {
           paddingBottom: 10,
         },
         tabBarBackground: () => (
-          <BlurView
-            tint="light"
-            intensity={100}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-            }}
-          />
+          Platform.OS === 'ios' ? (
+            <BlurView
+              tint="light"
+              intensity={100}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+              }}
+            />
+          ) : (
+            <View style={{ 
+              flex: 1, 
+              backgroundColor: 'rgba(255, 255, 255, 0.9)' 
+            }}/>
+          )
         ),
         headerShown: false,
       }}
@@ -39,48 +46,48 @@ export default function TabLayout() {
       <Tabs.Screen
         name="home"
         options={{
-          title: "Home",
+          title: 'Home',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={size} color={color} />
+            <Ionicons name="home-outline" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="search"
         options={{
-          title: "Search",
+          title: 'Search',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="search" size={size} color={color} />
+            <Ionicons name="search-outline" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="post"
         options={{
-          title: "Post",
+          title: 'Post',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="add-circle" size={size} color={color} />
+            <Ionicons name="add-circle-outline" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="activity"
         options={{
-          title: "Activity",
+          title: 'Activity',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="heart" size={size} color={color} />
+            <Ionicons name="notifications-outline" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Profile",
+          title: 'Profile',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person" size={size} color={color} />
+            <Ionicons name="person-outline" size={size} color={color} />
           ),
         }}
       />
     </Tabs>
   );
-} 
+}
