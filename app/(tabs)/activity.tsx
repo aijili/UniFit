@@ -20,15 +20,29 @@ import {
   getDocs,
   updateDoc,
   doc,
+  getDoc,
 } from 'firebase/firestore';
 import { Notification } from '../../hooks/types';
 
+interface BorrowRequest {
+  id: string;
+  itemId: string;
+  ownerId: string;
+  borrowerId: string;
+  status: string;
+  days: number;
+  createdAt: string;
+  dueDate?: string;
+  item?: any;
+  borrower?: any;
+}
+
 export default function ActivityScreen() {
   const [loading, setLoading] = useState(true);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [requests, setRequests] = useState<BorrowRequest[]>([]);
 
   useEffect(() => {
-    const fetchNotifications = async () => {
+    const fetchRequests = async () => {
       const user = auth.currentUser;
       if (!user) {
         setLoading(false);
@@ -36,81 +50,88 @@ export default function ActivityScreen() {
       }
       try {
         const q = query(
-          collection(db, 'notifications'),
-          where('recipientId', '==', user.uid),
-          orderBy('timestamp', 'desc')
+          collection(db, 'borrowRequests'),
+          where('ownerId', '==', user.uid),
+          where('status', '==', 'pending')
         );
         const snap = await getDocs(q);
-        const docs = snap.docs.map((d) => ({ 
-          id: d.id, 
-          ...d.data(),
-          timestamp: d.data().timestamp?.toDate() || new Date() 
-        } as Notification));
-        setNotifications(docs);
+        const reqs = await Promise.all(snap.docs.map(async (d) => {
+          const data = d.data();
+          // Fetch item info
+          let item = null;
+          try {
+            const itemDoc = await getDoc(doc(db, 'posts', data.itemId));
+            if (itemDoc.exists()) item = itemDoc.data();
+          } catch {}
+          // Fetch borrower info
+          let borrower = null;
+          try {
+            const borrowerDoc = await getDoc(doc(db, 'users', data.borrowerId));
+            if (borrowerDoc.exists()) borrower = borrowerDoc.data();
+          } catch {}
+          return {
+            id: d.id,
+            ...data,
+            item,
+            borrower,
+          };
+        }));
+        setRequests(reqs);
       } catch (err) {
-        console.error('Error fetching notifications:', err);
-        Alert.alert(
-          'Error',
-          'Failed to load notifications. Please try again later.'
-        );
+        console.error('Error fetching requests:', err);
+        Alert.alert('Error', 'Failed to load requests.');
       } finally {
         setLoading(false);
       }
     };
-
-    fetchNotifications();
+    fetchRequests();
   }, []);
 
-  const handleResponse = async (id: string, response: Notification['status']) => {
+  const handleResponse = async (id: string, response: 'accepted' | 'declined', days?: number) => {
     try {
-      await updateDoc(doc(db, 'notifications', id), { status: response });
-      setNotifications((prev) =>
-        prev.filter((n) => n.id !== id)
-      );
+      let update: any = { status: response };
+      if (response === 'accepted' && days) {
+        // Set dueDate to now + days
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + days);
+        update.dueDate = dueDate.toISOString();
+      }
+      await updateDoc(doc(db, 'borrowRequests', id), update);
+      setRequests((prev) => prev.filter((r) => r.id !== id));
     } catch (err) {
-      console.error('Error updating notification:', err);
-      Alert.alert(
-        'Error',
-        'Failed to update notification. Please try again.'
-      );
+      Alert.alert('Error', 'Failed to update request.');
     }
   };
 
-  const renderItem: ListRenderItem<Notification> = ({ item }) => {
-    const isRequest = item.type === 'borrow_request';
-    const message = isRequest
-      ? `${item.senderName} wants to borrow your ${item.itemName}`
-      : `Your return of ${item.senderName}'s ${item.itemName} is due tomorrow`;
-
+  const renderItem: ListRenderItem<BorrowRequest> = ({ item }) => {
     return (
       <View style={styles.card}>
         <Image
           source={
-            item.senderAvatarUrl
-              ? { uri: item.senderAvatarUrl }
+            item.borrower?.avatarUrl
+              ? { uri: item.borrower.avatarUrl }
               : require('../../assets/images/icon.png')
           }
           style={styles.avatar}
-          defaultSource={require('../../assets/images/icon.png')}
         />
         <View style={styles.textContainer}>
-          <Text style={styles.message}>{message}</Text>
-          {isRequest && (
-            <View style={styles.buttonRow}>
-              <TouchableOpacity
-                style={[styles.button, styles.accept]}
-                onPress={() => handleResponse(item.id, 'accepted')}
-              >
-                <Text style={styles.buttonText}>Accept</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.button, styles.decline]}
-                onPress={() => handleResponse(item.id, 'declined')}
-              >
-                <Text style={styles.buttonText}>Decline</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+          <Text style={styles.message}>
+            {item.borrower?.username || 'Someone'} wants to borrow your {item.item?.description || 'item'} for {item.days} days.
+          </Text>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={[styles.button, styles.accept]}
+              onPress={() => handleResponse(item.id, 'accepted', item.days)}
+            >
+              <Text style={styles.buttonText}>Accept</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, styles.decline]}
+              onPress={() => handleResponse(item.id, 'declined')}
+            >
+              <Text style={styles.buttonText}>Decline</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     );
@@ -130,12 +151,12 @@ export default function ActivityScreen() {
         <Text style={styles.title}>Activity</Text>
       </View>
       <FlatList
-        data={notifications}
+        data={requests}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>No activity yet.</Text>
+          <Text style={styles.emptyText}>No borrow requests yet.</Text>
         }
       />
     </SafeAreaView>
