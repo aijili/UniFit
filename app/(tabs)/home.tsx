@@ -14,7 +14,7 @@ import {
   Linking,
   ScrollView,
 } from 'react-native';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -47,6 +47,7 @@ interface Post {
   size: string;
   uid: string;
   url: string;
+  username?: string;
 }
 
 export default function HomeScreen() {
@@ -80,6 +81,7 @@ export default function HomeScreen() {
               size: data.size?.toUpperCase() || 'N/A',
               uid: data.uid || '',
               url: data.url || '',
+              username: data.username || '',
             } as Post;
           });
           
@@ -124,7 +126,15 @@ export default function HomeScreen() {
         </View>
       )}
 
-      <Text style={styles.postTitle}>{item.description}</Text>
+      <View style={styles.postContent}>
+        <TouchableOpacity 
+          style={styles.usernameContainer}
+          onPress={() => console.log('Profile link pressed')}
+        >
+          <Text style={styles.username}>{item.username || 'Anonymous'}</Text>
+        </TouchableOpacity>
+        <Text style={styles.postTitle}>{item.description}</Text>
+      </View>
       
       <View style={styles.postDetails}>
         <View style={styles.detailRow}>
@@ -226,6 +236,20 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  postContent: {
+    flex: 1,
+    padding: 10,
+    justifyContent: 'space-between',
+  },
+  usernameContainer: {
+    marginBottom: 8,
+  },
+  username: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
+    textDecorationLine: 'underline',
+  },
   container: { 
     flex: 1, 
     backgroundColor: '#FFFFFF' 
