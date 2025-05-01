@@ -17,8 +17,8 @@ export default function IndexScreen() {
           // User hasn't completed profile, redirect to onboarding
           router.replace('/onboarding');
         } else {
-          // User is signed in and has completed profile, redirect to tabs
-          router.replace('/(tabs)');
+          // User is signed in and has completed profile, redirect to home
+          router.replace('/(tabs)/home');
         }
       } else {
         // User is not signed in, redirect to login

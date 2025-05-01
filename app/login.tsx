@@ -54,11 +54,11 @@ const LoginScreen = () => {
     try {
       if (isLogin) {
         await signInWithEmailAndPassword(auth, email, password);
+        router.replace('/(tabs)/home');
       } else {
         await createUserWithEmailAndPassword(auth, email, password);
+        router.replace('/onboarding');
       }
-      // Let the index screen handle the routing based on profile completion
-      router.replace('/(tabs)/home');
     } catch (error: any) {
       const message = getErrorMessage(error.code);
       Alert.alert(isLogin ? 'Login Failed' : 'Signup Failed', message);

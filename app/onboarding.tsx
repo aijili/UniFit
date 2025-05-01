@@ -71,8 +71,8 @@ export default function OnboardingScreen() {
         createdAt: new Date().toISOString(),
       });
 
-      // Navigate to main app
-      router.replace('/');
+      // Navigate to home screen
+      router.replace('/(tabs)/home');
     } catch (error: any) {
       console.error('Error completing profile:', error);
       Alert.alert('Error', 'Failed to complete profile. Please try again.');
