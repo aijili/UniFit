@@ -16,13 +16,13 @@ import {
   collection,
   query,
   where,
-  orderBy,
   getDocs,
   updateDoc,
   doc,
   getDoc,
+  runTransaction,
 } from 'firebase/firestore';
-import { Notification } from '../../hooks/types';
+import { Ionicons } from '@expo/vector-icons';
 
 interface BorrowRequest {
   id: string;
@@ -48,6 +48,7 @@ export default function ActivityScreen() {
         setLoading(false);
         return;
       }
+
       try {
         const q = query(
           collection(db, 'borrowRequests'),
@@ -55,40 +56,85 @@ export default function ActivityScreen() {
           where('status', '==', 'pending')
         );
         const snap = await getDocs(q);
-        const reqs = await Promise.all(snap.docs.map(async (d) => {
-          const data = d.data();
-          // Fetch item info
-          let item = null;
-          try {
-            const itemDoc = await getDoc(doc(db, 'posts', data.itemId));
-            if (itemDoc.exists()) item = itemDoc.data();
-          } catch {}
-          // Fetch borrower info
-          let borrower = null;
-          try {
-            const borrowerDoc = await getDoc(doc(db, 'users', data.borrowerId));
-            if (borrowerDoc.exists()) borrower = borrowerDoc.data();
-          } catch {}
-          return {
-            id: d.id,
-            ...data,
-            item,
-            borrower,
-          };
-        }));
+
+        const reqs = await Promise.all(
+          snap.docs.map(async (d) => {
+            const data = d.data();
+            // Fetch item info
+            let item = null;
+            try {
+              const itemDoc = await getDoc(doc(db, 'posts', data.itemId));
+              if (itemDoc.exists()) item = itemDoc.data();
+            } catch (e) {
+              console.warn('Failed to fetch item data:', e);
+            }
+            // Fetch borrower info
+            let borrower = null;
+            try {
+              const borrowerDoc = await getDoc(doc(db, 'users', data.borrowerId));
+              if (borrowerDoc.exists()) borrower = borrowerDoc.data();
+            } catch (e) {
+              console.warn('Failed to fetch borrower data:', e);
+            }
+            return {
+              id: d.id,
+              ...data,
+              item,
+              borrower,
+            } as BorrowRequest;
+          })
+        );
+
         setRequests(reqs);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error fetching requests:', err);
-        Alert.alert('Error', 'Failed to load requests.');
+        Alert.alert('Error', err.message || 'Failed to load requests.');
       } finally {
         setLoading(false);
       }
     };
+
     fetchRequests();
   }, []);
 
-  const handleResponse = async (id: string, response: 'accepted' | 'declined', days?: number) => {
+  const handleResponse = async (
+    id: string,
+    response: 'accepted' | 'declined',
+    days?: number,
+    borrowerId?: string,
+    ownerId?: string
+  ) => {
     try {
+      const user = auth.currentUser;
+      if (!user) {
+        Alert.alert('Error', 'You must be logged in to perform this action.');
+        return;
+      }
+
+      console.log('Current user:', user.uid);
+      console.log('Request ID:', id);
+      console.log('Response:', response);
+      console.log('Days:', days);
+      console.log('Borrower ID:', borrowerId);
+      console.log('Owner ID:', ownerId);
+
+      // Get the request document first to verify ownership
+      const requestRef = doc(db, 'borrowRequests', id);
+      const requestSnap = await getDoc(requestRef);
+      
+      if (!requestSnap.exists()) {
+        Alert.alert('Error', 'Request not found.');
+        return;
+      }
+
+      const requestData = requestSnap.data();
+      console.log('Request data:', requestData);
+
+      if (requestData.ownerId !== user.uid) {
+        Alert.alert('Error', 'You do not have permission to update this request.');
+        return;
+      }
+
       let update: any = { status: response };
       if (response === 'accepted' && days) {
         // Set dueDate to now + days
@@ -96,46 +142,64 @@ export default function ActivityScreen() {
         dueDate.setDate(dueDate.getDate() + days);
         update.dueDate = dueDate.toISOString();
       }
-      await updateDoc(doc(db, 'borrowRequests', id), update);
+
+      console.log('Update data:', update);
+      await updateDoc(requestRef, update);
+
+      // If accepted, increment owner's lent count
+      if (response === 'accepted' && ownerId) {
+        await runTransaction(db, async (transaction) => {
+          const ownerRef = doc(db, 'users', ownerId);
+          const ownerSnap = await transaction.get(ownerRef);
+          const ownerCount = (ownerSnap.data()?.lentCount || 0) + 1;
+          transaction.update(ownerRef, { lentCount: ownerCount });
+        });
+      }
+
       setRequests((prev) => prev.filter((r) => r.id !== id));
-    } catch (err) {
-      Alert.alert('Error', 'Failed to update request.');
+    } catch (err: any) {
+      console.error('Borrow request update error:', err);
+      console.error('Error details:', {
+        code: err.code,
+        message: err.message,
+        stack: err.stack
+      });
+      Alert.alert('Error', err.message || 'Failed to update request.');
     }
   };
 
-  const renderItem: ListRenderItem<BorrowRequest> = ({ item }) => {
-    return (
-      <View style={styles.card}>
-        <Image
-          source={
-            item.borrower?.avatarUrl
-              ? { uri: item.borrower.avatarUrl }
-              : require('../../assets/images/icon.png')
-          }
-          style={styles.avatar}
-        />
-        <View style={styles.textContainer}>
-          <Text style={styles.message}>
-            {item.borrower?.username || 'Someone'} wants to borrow your {item.item?.description || 'item'} for {item.days} days.
-          </Text>
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={[styles.button, styles.accept]}
-              onPress={() => handleResponse(item.id, 'accepted', item.days)}
-            >
-              <Text style={styles.buttonText}>Accept</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.button, styles.decline]}
-              onPress={() => handleResponse(item.id, 'declined')}
-            >
-              <Text style={styles.buttonText}>Decline</Text>
-            </TouchableOpacity>
-          </View>
+  const renderItem: ListRenderItem<BorrowRequest> = ({ item }) => (
+    <View style={styles.card}>
+      <Image
+        source={
+          item.borrower?.avatarUrl
+            ? { uri: item.borrower.avatarUrl }
+            : require('../../assets/images/icon.png')
+        }
+        style={styles.avatar}
+      />
+      <View style={styles.textContainer}>
+        <Text style={styles.message}>
+          {item.borrower?.username || 'Someone'} wants to borrow your{' '}
+          {item.item?.description || 'item'} for {item.days} days.
+        </Text>
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={[styles.button, styles.accept]}
+            onPress={() => handleResponse(item.id, 'accepted', item.days, item.borrowerId, item.ownerId)}
+          >
+            <Text style={styles.buttonText}>Accept</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.button, styles.decline]}
+            onPress={() => handleResponse(item.id, 'declined')}
+          >
+            <Text style={styles.buttonText}>Decline</Text>
+          </TouchableOpacity>
         </View>
       </View>
-    );
-  };
+    </View>
+  );
 
   if (loading) {
     return (

@@ -362,7 +362,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: CARD_MARGIN,
     paddingVertical: 12,
+    marginBottom: 12,
     minHeight: 50,
+    maxHeight:50
   },
   chip: {
     paddingHorizontal: 16,
